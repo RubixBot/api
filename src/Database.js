@@ -92,37 +92,54 @@ module.exports = class Database {
   }
 
 
-  // Moderation Log
-  removeGuildCases (guildID) {
-    return this.db.collection('modlog').deleteMany({ guildID });
+  // Levelling
+  getUserXP (guild_id, user_id) {
+    return this.db.collection('levels').findOne({ guild_id, user_id });
   }
 
-  getGuildCases (guildID) {
-    return this.db.collection('modlog').find({ guildID }).toArray();
+  getLevelXP (level) {
+    return 5 * (level ** 2) + 30 * level + 80;
   }
 
-  createCase (data) {
-    return this.db.collection('modlog').insertOne(data);
+  getLevelFromXP (xp) {
+    let remaining = Number(xp);
+    let level = 0;
+
+    while (remaining >= this.getLevelXP(level)) {
+      remaining -= this.getLevelXP(level);
+      level += 1;
+    }
+
+    return level;
   }
 
-  getCase (guildID, caseID) {
-    return this.db.collection('modlog').findOne({ _id: `${guildID}.${caseID}` });
+  getRemainingXP (level, xp) {
+    let total = 0;
+    for (let i = 0; i < level; i++) {
+      total += this.getLevelXP(i);
+    }
+
+    return xp - total;
   }
 
-  getUserCases (targetID, guildID) {
-    return this.db.collection('modlog').find({ targetID, guildID }).toArray();
+  getTotalRanks (guild_id) {
+    return this.db.collection('levels').countDocuments({ guild_id });
   }
 
-  updateCase (guildID, caseID, newData) {
-    return this.db.collection('modlog').updateOne({ _id: `${guildID}.${caseID}` }, { $set: newData });
+  getGuildLeaderboard (guild_id) {
+    return this.db.collection('levels').find({ guild_id }, { $sort: { experience: 1 } }).toArray();
   }
 
-  deleteCase (guildID, caseID) {
-    return this.db.collection('modlog').findOneAndDelete({ guildID, caseID });
+  async getRankPosition (guild_id, user_id) {
+    return (await this.getGuildLeaderboard(guild_id)).map(s => s.user_id).indexOf(user_id) + 1;
   }
 
-  getUserWarnings (guildID, targetID) {
-    return this.db.collection('modlog').find({ targetID, guildID, action: 'warn' }).toArray();
+  resetUserXP (guild_id, user_id) {
+    return this.db.collection('levels').updateOne({ guild_id, user_id }, { $set: { experience: 0 } }, { $upsert: true });
+  }
+
+  resetServerXP (guild_id) {
+    return this.db.collection('levels').updateMany({ guild_id }, { $set: { experience: 0 } }, { $upsert: true });
   }
 
 };
